@@ -1,25 +1,138 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Reseach -Course Project #1"
+author: "Jussi Leinonen"
+date: "28 May 2018"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(gridExtra)
+```
 
-## Loading and preprocessing the data
+###Introduction
+It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. These type of devices are part of the "quantified self" movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
 
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
 
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
 
-## What is mean total number of steps taken per day?
+###Loading and preprocessing the data
+  
+```{r exploratory}
+data <- read.csv("activity.csv")
+data$date = as.Date(data$date, "%Y-%m-%d")
+summary(data)
+str(data)
+head(data)
+tail(data)
+```
 
+###What is mean total number of steps taken per day?
+  
+```{r daily}
+steps_daily <- aggregate(steps~date, data, sum)
+plot <- ggplot(data=steps_daily, aes(date,steps))
+steps_mean <- mean(steps_daily$steps)
+steps_median <- median(steps_daily$steps)
+plot <- plot + geom_histogram(stat = "identity") + geom_hline(yintercept=steps_mean, col = "red") + xlab("") + ylab("steps") +ggtitle("Original data")
+plot
+```
+  
+Mean (steps)
+```{r mean}
+steps_mean
+```
+Median (steps)
+```{r median}
+steps_median
+```
 
+###What is the average daily activity pattern?
 
-## What is the average daily activity pattern?
+```{r timeseries}
+steps_interval <- aggregate(steps~interval,data,mean)
+plot2 <- ggplot(data=steps_interval,aes(interval,steps))
+plot2+geom_line()
+```
+  
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r max}
+steps_interval[which.max(steps_interval$steps),1]
+```
+  
+###Imputing missing values
+There are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
 
+Total number of missing values in the dataset (i.e. the total number of rows with NAs):
+```{r NAs}
+sum(is.na(data$steps))
+```
 
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+Imputations to NAs are created by corresponding 5-min interval averages and the values are incorporated to form a new dataset (data_imputed):
+```{r impute}
+data_imputed <- data
+NAs <- numeric()
+for (i in 1:nrow(data))
+{
+  t <- data[i,]
+  if (is.na(t$steps)) {
+    s <- steps_interval[which(steps_interval$interval == t$interval),]$steps
+  }
+  else{
+    s <- t$steps
+  }
+  NAs <- c(NAs, s)
+}
+data_imputed$steps <- NAs
+```
+Comparison of histograms (original vs imputed) of total number of steps taken per day shows only a small difference.
+```{r comparison}
+steps_imputed <- aggregate(steps~date, data_imputed, sum)
+plot3 <- ggplot(data=steps_imputed, aes(date,steps))
+steps_mean2 <- mean(steps_imputed$steps)
+steps_median2 <- median(steps_imputed$steps)
+plot3 <- plot3 + geom_histogram(stat = "identity") + geom_hline(yintercept=steps_mean2, col="blue")+ xlab("") + ylab("steps") + ggtitle("Imputed data")
+grid.arrange(plot,plot3, nrow=1)
+```
+  
+Difference of mean (original - imputed) (steps)
+```{r mean2}
+steps_mean-steps_mean2
+```
+Difference of median (original - imputed) (steps)
+```{r median2}
+steps_median-steps_mean2
+```
+Difference of standard deviation (original - imputed) (steps)
+```{r sd}
+sd(steps_daily$steps)
+sd(steps_daily$steps)-sd(steps_imputed$steps)
+```
+Mean and median values remained similar after imputations, but standard deviation decreased.
+  
+###Are there differences in activity patterns between weekdays and weekends?
+First a new factor variable is created in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r weekdays}
+week <- weekdays(data_imputed$date)
+for (i in 1:length(week)) {
+    if ((week[i] == "lauantai") | (week[i] == "sunnuntai")) 
+    week[i] <- "weekend"  else  week[i] <- "weekday"
+}
+week <- as.factor(week)
+summary(week)
+data_imputed$week <- week
+data_imputed_weekday <- subset(data_imputed, week == "weekday")
+data_imputed_weekend <- subset(data_imputed, week == "weekend")
+```
+Then the time series plots of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis) are compared.
+```{r compare}
+steps_weekday <- aggregate(steps~interval,data_imputed_weekday,mean)
+plot4 <- ggplot(data=steps_weekday,aes(interval,steps)) +geom_line() + ggtitle("Weekday") +ylim(0,250)
+steps_weekend <- aggregate(steps~interval,data_imputed_weekend,mean)
+plot5 <- ggplot(data=steps_weekend,aes(interval,steps)) +geom_line() + ggtitle("Weekend") +ylim(0,250)
+grid.arrange(plot4,plot5, nrow=1)
+```
+  
+Activity (step count) is more evenly dispersed during the weekends than during the weekdays.
